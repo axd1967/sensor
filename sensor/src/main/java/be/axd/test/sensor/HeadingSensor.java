@@ -84,13 +84,17 @@ public class HeadingSensor implements SensorEventListener {
             return;
 
         float[] rotationMatrix = new float[16];
-        SensorManager.getRotationMatrixFromVector(rotationMatrix,
-                sensorEvent.values);
+        SensorManager.getRotationMatrixFromVector(rotationMatrix, sensorEvent.values);
+        SensorManager.remapCoordinateSystem(rotationMatrix, SensorManager.AXIS_X, SensorManager.AXIS_Z, rotationMatrix);
+
         determineOrientation(rotationMatrix);
 
         // inclination
 
     }
+
+    double hAz = 0;
+    final static double k = 0.6;
 
     private void determineOrientation(float[] rotationMatrix) {
 
@@ -101,6 +105,9 @@ public class HeadingSensor implements SensorEventListener {
         double azimuth = Math.toDegrees(orientationValues[0]);
         double pitch = Math.toDegrees(orientationValues[1]);
         double roll = Math.toDegrees(orientationValues[2]);
+
+
+        hAz =  (1-k)*hAz + k *azimuth;
 
         fb.rotdata(azimuth, pitch, roll);
     }
