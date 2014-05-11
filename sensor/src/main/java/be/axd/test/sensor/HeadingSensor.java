@@ -19,13 +19,17 @@ public class HeadingSensor implements SensorEventListener {
         void center();
         void right();
 
+        void mode(String m);
+
+        void ref(double refaz);
+
 //        void acc(String acc);
         void rotdata(double az, double pitch, double roll);
     }
 
-    enum Mode { left, center, right };
+    enum Mode { left, center, right, undefined };
 
-    Mode m;
+    Mode m = Mode.undefined;
 
     private FB fb;
 
@@ -34,24 +38,36 @@ public class HeadingSensor implements SensorEventListener {
         this.fb = fb;
     }
 
+    // send feedback if true
+    boolean running = false;
+
     public void initHdg(Context ctx) {
         mSensorManager = (SensorManager) ctx.getSystemService(Context.SENSOR_SERVICE);
+        mSensorManager.registerListener(this, mSensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR), SensorManager.SENSOR_DELAY_NORMAL);
+
+        refHdg();
 
     }
 
     public void onResume(Context ctx) {
 
-//        mSensorManager = (SensorManager) ctx.getSystemService(Context.SENSOR_SERVICE);
-        mSensorManager.registerListener(this, mSensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR), SensorManager.SENSOR_DELAY_NORMAL);
 
         refHdg();
     }
+
+    int ctr;
+    double refAz;
 
     private void refHdg() {
         // get current heading as reference
         // ...
 
         m = Mode.center;
+        running = false;
+
+        refAz = hAz;
+        ctr = 10;
+
     }
 
     public void onPause() {
@@ -61,24 +77,6 @@ public class HeadingSensor implements SensorEventListener {
     @Override
     public void onSensorChanged(SensorEvent sensorEvent) {
 
-//        // accuracy
-//        switch ( sensorEvent.accuracy) {
-//            case SensorManager.SENSOR_STATUS_ACCURACY_HIGH:
-//                fb.acc("HIGH");
-//                break;
-//            case SensorManager.SENSOR_STATUS_ACCURACY_MEDIUM:
-//                fb.acc("MED");
-//                break;
-//            case SensorManager.SENSOR_STATUS_ACCURACY_LOW:
-//                fb.acc("LOW");
-//                break;
-//            case SensorManager.SENSOR_STATUS_UNRELIABLE:
-//                fb.acc("UNR");
-//                break;
-//            default:
-//                fb.acc("XXXXXXXXXXX");
-//                break;
-//        }
 
         if (sensorEvent.sensor.getType() != Sensor.TYPE_ROTATION_VECTOR)
             return;
@@ -94,7 +92,7 @@ public class HeadingSensor implements SensorEventListener {
     }
 
     double hAz = 0;
-    final static double k = 0.6;
+    final static double k = 0.8;
 
     private void determineOrientation(float[] rotationMatrix) {
 
@@ -107,11 +105,60 @@ public class HeadingSensor implements SensorEventListener {
         double roll = Math.toDegrees(orientationValues[2]);
 
 
-        hAz =  (1-k)*hAz + k *azimuth;
+        hAz = (1-k)*hAz + k *azimuth;
 
-        fb.rotdata(azimuth, pitch, roll);
+        if (ctr > 0) {
+            --ctr;
+            fb.mode("n: "+ ctr);
+            return;
+        }
+
+        if (!running) {
+            refAz = hAz;
+            running = true;
+            m = Mode.center;
+            fb.mode("run");
+        }
+
+        //fb.ref(refAz);
+
+        fb.rotdata(hAz, pitch, roll);
+
+        double limit = 30; // !
+        if (m == Mode.center && beyond(hAz, refAz, +limit)) {
+            m = Mode.right;
+            fb.right();
+        }
+        else if (m == Mode.center && before (hAz, refAz, -limit)) {
+            m = Mode.left;
+            fb.left();
+
+        }
+        else if (
+                m == Mode.right && before (hAz, refAz, + 10)
+                || m == Mode.left && beyond (hAz, refAz, - 10)
+
+                ) {
+            m = Mode.center;
+            fb.center();
+        }
     }
 
+    boolean beyond(double current, double target, double delta) {
+
+        if (current < 0) current += 360;
+        if (target < 0) target += 360;
+
+        return (target + delta < current );
+    }
+
+    boolean before(double current, double target, double delta) {
+
+        if (current < 0) current += 360;
+        if (target < 0) target += 360;
+
+        return (current < target + delta );
+    }
     @Override
     public void onAccuracyChanged(Sensor sensor, int i) {
 
