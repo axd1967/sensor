@@ -1,3 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
+
     <string name="app_name">Sensor-S4</string>
+    <string name="title_activity_main">MainActivity</string>
+
 </resources>
